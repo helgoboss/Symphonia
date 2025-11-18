@@ -16,7 +16,7 @@
 
 // Shared modules.
 mod common;
-mod header;
+pub mod header;
 
 // Demuxer module.
 mod demuxer;
