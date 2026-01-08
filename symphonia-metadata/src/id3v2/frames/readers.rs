@@ -101,6 +101,18 @@ impl Encoding {
 fn decode_string_buf(buf: &[u8], encoding: Encoding) -> String {
     match encoding {
         Encoding::Iso8859_1 => {
+            // There are some old files out there which claim to have ISO encoding but actually
+            // use another encoding. So we check if the encoding really looks like ISO-8859-1.
+            if let Some(guessed_encoding) = guess_encoding(buf) {
+                if guessed_encoding.name() != "windows-1252" {
+                    // Doesn't look like ISO-8859-1 (= windows-1252). Use guessed encoding.
+                    if let Some(text) = guessed_encoding
+                        .decode_without_bom_handling_and_without_replacement(buf)
+                    {
+                        return text.into_owned();
+                    }
+                }
+            }
             // Decode as an ID3v2-specific variant of ISO/IEC 8859-1 that allows the line-feed
             // control character.
             decode_id3v2_iso8859_1(buf).collect()
@@ -115,6 +127,16 @@ fn decode_string_buf(buf: &[u8], encoding: Encoding) -> String {
             text::decode_utf16be_lossy(buf).collect()
         }
     }
+}
+
+fn guess_encoding(buf: &[u8]) -> Option<&'static encoding_rs::Encoding> {
+    let mut detector = chardetng::EncodingDetector::new();
+    detector.feed(buf, true);
+    let (encoding, probably_correct) = detector.guess_assess(None, false);
+    if !probably_correct {
+        return None;
+    }
+    Some(encoding)
 }
 
 fn decode_id3v2_iso8859_1(buf: &[u8]) -> impl Iterator<Item = char> + '_ {
